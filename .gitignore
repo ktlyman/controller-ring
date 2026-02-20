@@ -1,0 +1,7 @@
+node_modules/
+build/
+.env
+ring-config.json
+*.log
+ring-events.log
+.DS_Store
