@@ -21,6 +21,11 @@ export function loadConfigFromEnv(): RingToolConfig {
     databasePath: process.env.RING_DATABASE_PATH ?? "./ring-data.db",
     routineLogMaxSize: optionalInt(process.env.ROUTINE_LOG_MAX_SIZE, 100000),
     cloudCacheMaxAgeMinutes: optionalInt(process.env.CLOUD_CACHE_MAX_AGE_MINUTES, 30),
+    crawlEnabled: process.env.RING_CRAWL_ENABLED === "true",
+    crawlDelayMs: optionalInt(process.env.RING_CRAWL_DELAY_MS, 2000),
+    crawlPageSize: optionalInt(process.env.RING_CRAWL_PAGE_SIZE, 50),
+    crawlVideoWindowDays: optionalInt(process.env.RING_CRAWL_VIDEO_WINDOW_DAYS, 7),
+    crawlIncrementalIntervalMinutes: optionalInt(process.env.RING_CRAWL_INCREMENTAL_MINUTES, 15),
   };
 }
 

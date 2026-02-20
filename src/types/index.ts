@@ -269,6 +269,109 @@ export interface DeviceHistoryQuery {
   category?: "alarm" | "beams";
 }
 
+// ── Crawl Types ──
+
+/** Phase of a crawl for a single entity (camera or location). */
+export type CrawlPhase = "events" | "videos" | "device_history";
+
+/** Status of a crawl for a single entity+phase combination. */
+export type CrawlStatus = "idle" | "running" | "completed" | "error" | "paused";
+
+/** Persisted crawl state for one entity+phase combination. */
+export interface CrawlState {
+  /** Camera device ID (for events/videos) or location ID (for device_history). */
+  entityId: string;
+  phase: CrawlPhase;
+  status: CrawlStatus;
+  /** Pagination cursor: event pagination key, or stringified offset for device history. */
+  paginationKey: string | null;
+  /** ISO 8601 timestamp of the oldest item fetched so far. */
+  oldestFetchedAt: string | null;
+  /** ISO 8601 timestamp of the newest item fetched so far. */
+  newestFetchedAt: string | null;
+  /** Total items fetched across all pages in this crawl. */
+  totalFetched: number;
+  /** Last error message if status is "error". */
+  lastError: string | null;
+  /** ISO 8601 timestamp when this crawl state was last updated. */
+  updatedAt: string;
+  /** ISO 8601 timestamp when the crawl was started. */
+  startedAt: string | null;
+  /** ISO 8601 timestamp when the crawl completed. */
+  completedAt: string | null;
+}
+
+/** Configuration for the historic crawler. */
+export interface CrawlConfig {
+  /** Whether the crawl should start automatically on initialize(). Default: false */
+  enabled: boolean;
+  /** Delay in milliseconds between API requests. Default: 2000 */
+  delayMs: number;
+  /** Number of events per page to request. Default: 50 */
+  pageSize: number;
+  /** Size of date window in days for video search. Default: 7 */
+  videoWindowDays: number;
+  /** Interval in minutes for incremental forward crawl after backfill. Default: 15 */
+  incrementalIntervalMinutes: number;
+}
+
+/** Aggregate crawl status returned by get_crawl_status. */
+export interface CrawlStatusReport {
+  /** Whether the crawler is currently active. */
+  running: boolean;
+  /** Per-camera crawl states (events + videos). */
+  cameras: Array<{
+    deviceId: string;
+    deviceName: string;
+    events: { status: CrawlStatus; totalFetched: number; oldestFetchedAt: string | null };
+    videos: { status: CrawlStatus; totalFetched: number; oldestFetchedAt: string | null };
+  }>;
+  /** Per-location device history crawl states. */
+  locations: Array<{
+    locationId: string;
+    locationName: string;
+    deviceHistory: { status: CrawlStatus; totalFetched: number; oldestFetchedAt: string | null };
+  }>;
+  /** Overall progress summary. */
+  summary: {
+    totalCameras: number;
+    camerasCompleted: number;
+    totalLocations: number;
+    locationsCompleted: number;
+    totalEventsFetched: number;
+    totalVideosFetched: number;
+    totalDeviceHistoryFetched: number;
+  };
+}
+
+/** A device history event stored in the database. */
+export interface DeviceHistoryEntry {
+  id: number;
+  locationId: string;
+  deviceId: string | null;
+  deviceName: string | null;
+  eventType: string | null;
+  createdAt: string | null;
+  body: Record<string, unknown>;
+  cachedAt: string;
+}
+
+/** Query parameters for querying the device history store. */
+export interface DeviceHistoryStoreQuery {
+  /** Location ID */
+  locationId?: string;
+  /** Device ID */
+  deviceId?: string;
+  /** Event type filter */
+  eventType?: string;
+  /** Start of time range (ISO 8601) */
+  startTime?: string;
+  /** End of time range (ISO 8601) */
+  endTime?: string;
+  /** Max number of results */
+  limit?: number;
+}
+
 // ── Configuration ──
 
 export interface RingToolConfig {
@@ -285,4 +388,14 @@ export interface RingToolConfig {
   routineLogMaxSize?: number;
   /** Cloud event cache max age in minutes. Default: 30 */
   cloudCacheMaxAgeMinutes?: number;
+  /** Enable background historic data crawling. Default: false */
+  crawlEnabled?: boolean;
+  /** Delay between crawl API requests in ms. Default: 2000 */
+  crawlDelayMs?: number;
+  /** Events per page for crawl requests. Default: 50 */
+  crawlPageSize?: number;
+  /** Video search window size in days. Default: 7 */
+  crawlVideoWindowDays?: number;
+  /** Incremental crawl interval in minutes after backfill. Default: 15 */
+  crawlIncrementalIntervalMinutes?: number;
 }

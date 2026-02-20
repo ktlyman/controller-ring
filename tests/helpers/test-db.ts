@@ -8,6 +8,8 @@ import { RingDatabase } from "../../src/storage/database.js";
 import { EventStore } from "../../src/storage/event-store.js";
 import { RoutineStore } from "../../src/storage/routine-store.js";
 import { CloudCache } from "../../src/storage/cloud-cache.js";
+import { CrawlStore } from "../../src/storage/crawl-store.js";
+import { DeviceHistoryStore } from "../../src/storage/device-history-store.js";
 
 /** Create an in-memory RingDatabase for tests. */
 export function createTestDatabase(): RingDatabase {
@@ -30,4 +32,16 @@ export function createTestRoutineStore(maxSize = 100): RoutineStore {
 export function createTestCloudCache(maxAgeMs = 30 * 60 * 1000): CloudCache {
   const db = createTestDatabase();
   return new CloudCache(db.getConnection(), maxAgeMs);
+}
+
+/** Create an in-memory CrawlStore. */
+export function createTestCrawlStore(): { store: CrawlStore; db: RingDatabase } {
+  const db = createTestDatabase();
+  return { store: new CrawlStore(db.getConnection()), db };
+}
+
+/** Create an in-memory DeviceHistoryStore. */
+export function createTestDeviceHistoryStore(): { store: DeviceHistoryStore; db: RingDatabase } {
+  const db = createTestDatabase();
+  return { store: new DeviceHistoryStore(db.getConnection()), db };
 }

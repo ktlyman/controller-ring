@@ -6,7 +6,7 @@
 import Database from "better-sqlite3";
 import type { Database as DatabaseType } from "better-sqlite3";
 
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
 
 export interface DatabaseConfig {
   /** Path to the SQLite database file. Use ":memory:" for tests. */
@@ -63,6 +63,9 @@ export class RingDatabase {
     const migrate = this.db.transaction(() => {
       if (fromVersion < 1) {
         this.migrateToV1();
+      }
+      if (fromVersion < 2) {
+        this.migrateToV2();
       }
     });
     migrate();
@@ -157,5 +160,46 @@ export class RingDatabase {
     this.db.prepare(
       "INSERT INTO schema_version (version, applied_at) VALUES (?, datetime('now'))"
     ).run(1);
+  }
+
+  private migrateToV2(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS crawl_state (
+        entity_id TEXT NOT NULL,
+        phase TEXT NOT NULL CHECK (phase IN ('events', 'videos', 'device_history')),
+        status TEXT NOT NULL DEFAULT 'idle',
+        pagination_key TEXT,
+        oldest_fetched_at TEXT,
+        newest_fetched_at TEXT,
+        total_fetched INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        started_at TEXT,
+        completed_at TEXT,
+        PRIMARY KEY (entity_id, phase)
+      )
+    `);
+    this.db.exec("CREATE INDEX IF NOT EXISTS idx_crawl_state_status ON crawl_state(status)");
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS device_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        location_id TEXT NOT NULL,
+        device_id TEXT,
+        device_name TEXT,
+        event_type TEXT,
+        created_at TEXT,
+        body TEXT NOT NULL DEFAULT '{}',
+        cached_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    this.db.exec("CREATE INDEX IF NOT EXISTS idx_device_history_location_id ON device_history(location_id)");
+    this.db.exec("CREATE INDEX IF NOT EXISTS idx_device_history_device_id ON device_history(device_id)");
+    this.db.exec("CREATE INDEX IF NOT EXISTS idx_device_history_created_at ON device_history(created_at)");
+    this.db.exec("CREATE INDEX IF NOT EXISTS idx_device_history_event_type ON device_history(event_type)");
+
+    this.db.prepare(
+      "INSERT INTO schema_version (version, applied_at) VALUES (?, datetime('now'))"
+    ).run(2);
   }
 }

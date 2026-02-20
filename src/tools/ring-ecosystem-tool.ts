@@ -10,8 +10,11 @@ import { RingDatabase } from "../storage/database.js";
 import { EventStore } from "../storage/event-store.js";
 import { RoutineStore } from "../storage/routine-store.js";
 import { CloudCache } from "../storage/cloud-cache.js";
+import { CrawlStore } from "../storage/crawl-store.js";
+import { DeviceHistoryStore } from "../storage/device-history-store.js";
 import { EventLogger } from "../events/event-logger.js";
 import { CloudHistory } from "../events/cloud-history.js";
+import { HistoricCrawler } from "../events/historic-crawler.js";
 import { RealtimeMonitor } from "../events/realtime-monitor.js";
 import { RoutineLogger } from "../logging/routine-logger.js";
 import type {
@@ -26,20 +29,24 @@ import type {
   CloudEventQuery,
   CloudEventQueryResult,
   CloudVideoResult,
+  CrawlStatusReport,
   VideoSearchQuery,
   DeviceHistoryQuery,
 } from "../types/index.js";
 
 export class RingEcosystemTool {
+  private config: RingToolConfig;
   private client: RingClient;
   private database: RingDatabase;
   private deviceManager: DeviceManager;
   private eventLogger: EventLogger;
   private cloudHistory: CloudHistory;
+  private historicCrawler: HistoricCrawler;
   private realtimeMonitor: RealtimeMonitor;
   private routineLogger: RoutineLogger;
 
   constructor(config: RingToolConfig) {
+    this.config = config;
     this.client = new RingClient(config);
     this.deviceManager = new DeviceManager(this.client);
 
@@ -56,9 +63,25 @@ export class RingEcosystemTool {
       (config.cloudCacheMaxAgeMinutes ?? 30) * 60 * 1000
     );
 
+    const crawlStore = new CrawlStore(conn);
+    const deviceHistoryStore = new DeviceHistoryStore(conn);
+
     this.eventLogger = new EventLogger(eventStore, config.eventLogFile);
     this.routineLogger = new RoutineLogger(routineStore);
     this.cloudHistory = new CloudHistory(this.client, cloudCache);
+    this.historicCrawler = new HistoricCrawler(
+      this.client,
+      this.cloudHistory,
+      crawlStore,
+      deviceHistoryStore,
+      {
+        enabled: config.crawlEnabled ?? false,
+        delayMs: config.crawlDelayMs ?? 2000,
+        pageSize: config.crawlPageSize ?? 50,
+        videoWindowDays: config.crawlVideoWindowDays ?? 7,
+        incrementalIntervalMinutes: config.crawlIncrementalIntervalMinutes ?? 15,
+      }
+    );
     this.realtimeMonitor = new RealtimeMonitor(this.client, this.eventLogger);
   }
 
@@ -67,12 +90,19 @@ export class RingEcosystemTool {
   async initialize(): Promise<{ locations: number; devices: number }> {
     await this.client.initialize();
     await this.realtimeMonitor.start();
+
+    // Start background historic data crawl if enabled
+    if (this.historicCrawler && this.config.crawlEnabled) {
+      await this.historicCrawler.start();
+    }
+
     const locations = await this.deviceManager.listLocations();
     const devices = await this.deviceManager.listAllDevices();
     return { locations: locations.length, devices: devices.length };
   }
 
   shutdown(): void {
+    this.historicCrawler.stop();
     this.realtimeMonitor.stop();
     this.database.close();
   }
@@ -259,17 +289,36 @@ export class RingEcosystemTool {
     return this.cloudHistory.getDeviceHistory(query);
   }
 
+  // ── Crawl Control ──
+
+  /** Start the background historic data crawler. */
+  async startCrawl(): Promise<void> {
+    await this.historicCrawler.start();
+  }
+
+  /** Stop the background historic data crawler. */
+  stopCrawl(): void {
+    this.historicCrawler.stop();
+  }
+
+  /** Get the current crawl status report. */
+  async getCrawlStatus(): Promise<CrawlStatusReport> {
+    return this.historicCrawler.getStatus();
+  }
+
   // ── Status ──
 
   status(): {
     monitoring: boolean;
     eventsLogged: number;
     routinesLogged: number;
+    crawling: boolean;
   } {
     return {
       monitoring: this.realtimeMonitor.isRunning,
       eventsLogged: this.eventLogger.size,
       routinesLogged: this.routineLogger.size,
+      crawling: this.historicCrawler.isRunning,
     };
   }
 }

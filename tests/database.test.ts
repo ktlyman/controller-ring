@@ -17,11 +17,13 @@ describe("RingDatabase", () => {
     expect(tableNames).toContain("routines");
     expect(tableNames).toContain("cloud_events");
     expect(tableNames).toContain("cloud_videos");
+    expect(tableNames).toContain("crawl_state");
+    expect(tableNames).toContain("device_history");
 
     db.close();
   });
 
-  it("records schema version 1 on first creation", () => {
+  it("records schema versions 1 and 2 on first creation", () => {
     const db = new RingDatabase({ filePath: ":memory:" });
     const conn = db.getConnection();
 
@@ -29,7 +31,13 @@ describe("RingDatabase", () => {
       .prepare("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1")
       .get() as { version: number };
 
-    expect(row.version).toBe(1);
+    expect(row.version).toBe(2);
+
+    const allVersions = conn
+      .prepare("SELECT version FROM schema_version ORDER BY version ASC")
+      .all() as { version: number }[];
+
+    expect(allVersions.map((v) => v.version)).toEqual([1, 2]);
 
     db.close();
   });
@@ -44,7 +52,7 @@ describe("RingDatabase", () => {
       .prepare("SELECT MAX(version) as version FROM schema_version")
       .get() as { version: number };
 
-    expect(version.version).toBe(1);
+    expect(version.version).toBe(2);
 
     db1.close();
   });
@@ -91,6 +99,37 @@ describe("RingDatabase", () => {
     // In-memory databases can't actually use WAL, but the pragma was issued
     // For file-based databases, this would return "wal"
     expect(mode[0].journal_mode).toBeDefined();
+
+    db.close();
+  });
+
+  it("creates expected indexes on the crawl_state table", () => {
+    const db = new RingDatabase({ filePath: ":memory:" });
+    const conn = db.getConnection();
+
+    const indexes = conn
+      .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='crawl_state'")
+      .all() as { name: string }[];
+    const indexNames = indexes.map((i) => i.name);
+
+    expect(indexNames).toContain("idx_crawl_state_status");
+
+    db.close();
+  });
+
+  it("creates expected indexes on the device_history table", () => {
+    const db = new RingDatabase({ filePath: ":memory:" });
+    const conn = db.getConnection();
+
+    const indexes = conn
+      .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='device_history'")
+      .all() as { name: string }[];
+    const indexNames = indexes.map((i) => i.name);
+
+    expect(indexNames).toContain("idx_device_history_location_id");
+    expect(indexNames).toContain("idx_device_history_device_id");
+    expect(indexNames).toContain("idx_device_history_created_at");
+    expect(indexNames).toContain("idx_device_history_event_type");
 
     db.close();
   });

@@ -429,6 +429,70 @@ server.tool(
   }
 );
 
+// ── Tool: start_crawl ──
+
+server.tool(
+  "start_crawl",
+  "Start the background historic data crawler, which fetches all historical Ring cloud events, video metadata, and device history for all cameras and locations, storing them in the local database. Safe to call if already running. The crawl resumes from where it left off if previously stopped.",
+  {},
+  async () => {
+    try {
+      await ring.startCrawl();
+      const status = await ring.getCrawlStatus();
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({ started: true, ...status }, null, 2),
+        }],
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${errorMessage(err)}` }], isError: true };
+    }
+  }
+);
+
+// ── Tool: get_crawl_status ──
+
+server.tool(
+  "get_crawl_status",
+  "Get the current status of the background historic data crawler, including per-camera progress for cloud events and video crawling, and per-location progress for device history crawling.",
+  {},
+  async () => {
+    try {
+      const status = await ring.getCrawlStatus();
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(status, null, 2),
+        }],
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${errorMessage(err)}` }], isError: true };
+    }
+  }
+);
+
+// ── Tool: stop_crawl ──
+
+server.tool(
+  "stop_crawl",
+  "Stop the background historic data crawler. The crawl can be resumed later from where it left off by calling start_crawl.",
+  {},
+  async () => {
+    try {
+      ring.stopCrawl();
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({ stopped: true, message: "Crawl stopped. Can be resumed with start_crawl." }),
+        }],
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${errorMessage(err)}` }], isError: true };
+    }
+  }
+);
+
 // ── Start server ──
 
 async function main() {
