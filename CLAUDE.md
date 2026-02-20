@@ -16,13 +16,14 @@ This is a TypeScript MCP server that wraps `ring-client-api` to expose Ring smar
 
 - `src/client/` — Ring API wrapper and config loader; `RingClient` handles auth token persistence and refresh
 - `src/devices/` — `DeviceManager` enumerates and controls cameras, doorbells, alarm, lights, sensors
-- `src/events/` — `EventLogger` stores events in a ring buffer; `RealtimeMonitor` subscribes to live Ring push notifications via RxJS
-- `src/logging/` — `RoutineLogger` records an audit trail of every command executed through the tool
+- `src/events/` — `EventLogger` persists events via `EventStore`; `RealtimeMonitor` subscribes to live Ring push notifications (cameras, doorbells, alarm sensors) via RxJS; `CloudHistory` queries Ring's cloud-stored events and video recordings with optional `CloudCache`
+- `src/logging/` — `RoutineLogger` records an audit trail of every command via `RoutineStore`
+- `src/storage/` — SQLite persistence layer; `RingDatabase` manages the connection and schema migrations; `EventStore`, `RoutineStore`, and `CloudCache` provide table-specific read/write operations backed by `better-sqlite3`
 - `src/tools/` — `RingEcosystemTool` orchestrates all modules into a single agent-facing interface
 - `src/types/` — shared TypeScript type definitions
-- `src/mcp-server.ts` — MCP server entry point exposing 11 tools over stdio
+- `src/mcp-server.ts` — MCP server entry point exposing 15 tools over stdio
 - `src/index.ts` — library exports and standalone CLI entry point
-- `tests/` — Vitest unit tests for EventLogger and RoutineLogger
+- `tests/` — Vitest unit tests covering storage (database, event-store, routine-store, cloud-cache), loggers, and real-time monitoring; `tests/helpers/test-db.ts` provides in-memory database factories
 
 ## Standards
 
@@ -36,7 +37,7 @@ This is a TypeScript MCP server that wraps `ring-client-api` to expose Ring smar
 
 ### Code Organization
 
-- MUST keep each module in its designated directory (`client/`, `devices/`, `events/`, `logging/`, `tools/`, `types/`)
+- MUST keep each module in its designated directory (`client/`, `devices/`, `events/`, `logging/`, `storage/`, `tools/`, `types/`)
 - SHOULD add new MCP tools in `src/mcp-server.ts` using the `server.tool()` registration pattern
 - SHOULD route device commands through `RingEcosystemTool` instead of calling `DeviceManager` directly, so that routine logging is preserved
 
@@ -78,6 +79,7 @@ This is a TypeScript MCP server that wraps `ring-client-api` to expose Ring smar
 ## Testing
 
 - MUST run `npm test` and confirm all tests pass before committing
-- MUST add tests for new logic in `EventLogger` or `RoutineLogger`
+- MUST add tests for new logic in `EventLogger`, `RoutineLogger`, or the storage layer (`EventStore`, `RoutineStore`, `CloudCache`)
 - SHOULD place test files in `tests/` following the `<module>.test.ts` naming convention
+- SHOULD use `createTestDatabase()` and the related helpers from `tests/helpers/test-db.ts` to create in-memory SQLite databases for tests
 - MAY skip integration tests that require a live Ring account; instead mock the Ring API in unit tests

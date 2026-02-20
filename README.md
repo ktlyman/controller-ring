@@ -3,7 +3,9 @@
 An agent-facing tool for interacting with the [Ring](https://ring.com) smart home ecosystem. Built on top of the unofficial [`ring-client-api`](https://github.com/dgreif/ring), it provides:
 
 - **Device access & control** — list, inspect, and command Ring cameras, doorbells, alarm systems, lights, and sensors
-- **Real-time event monitoring** — subscribe to live motion, doorbell press, alarm, and connection events
+- **Real-time event monitoring** — subscribe to live motion, doorbell press, alarm, sensor, and connection events (including contact sensors, motion sensors, flood/freeze, smoke/CO, tamper, and siren)
+- **Cloud history & video search** — query Ring's cloud-stored camera events and video recordings going back up to 180 days (with Ring Protect plan)
+- **SQLite persistent storage** — all events, routine logs, and cloud history are persisted to a local SQLite database across restarts
 - **Historic event logging** — query past events by device, location, type, or time range
 - **Routine logging** — audit trail of every action taken through the tool
 
@@ -36,17 +38,23 @@ src/
 │   └── config.ts
 ├── devices/         Device enumeration & control
 │   └── device-manager.ts
-├── events/          Event capture & querying
+├── events/          Event capture, cloud history & querying
 │   ├── event-logger.ts
+│   ├── cloud-history.ts
 │   └── realtime-monitor.ts
 ├── logging/         Routine action audit log
 │   └── routine-logger.ts
+├── storage/         SQLite persistence layer
+│   ├── database.ts
+│   ├── event-store.ts
+│   ├── routine-store.ts
+│   └── cloud-cache.ts
 ├── tools/           Core orchestrator
 │   └── ring-ecosystem-tool.ts
 ├── types/           TypeScript type definitions
 │   └── index.ts
 ├── index.ts         Library exports & CLI entry point
-└── mcp-server.ts    MCP server exposing all tools
+└── mcp-server.ts    MCP server exposing 15 tools over stdio
 ```
 
 ## MCP Tools
@@ -66,6 +74,10 @@ When running as an MCP server (`npm run start:mcp`), the following tools are ava
 | `query_routines` | Query the audit log of all actions taken |
 | `get_routine_summary` | Get routine counts grouped by action |
 | `get_status` | Check monitoring status and log sizes |
+| `get_cloud_events` | Query Ring's cloud-stored camera event history (up to 180 days) with pagination |
+| `search_videos` | Search video recordings from a camera within a date range |
+| `get_recording_url` | Get a temporary playback URL for a specific recording by ding ID |
+| `get_device_history` | Get alarm or Ring Beams device/sensor history for a location |
 
 ## Programmatic Usage
 
@@ -74,6 +86,7 @@ import { RingEcosystemTool } from "ring-ecosystem-tool";
 
 const tool = new RingEcosystemTool({
   refreshToken: process.env.RING_REFRESH_TOKEN!,
+  databasePath: "./ring-data.db", // SQLite file (default; use ":memory:" for no persistence)
 });
 
 // Initialize and start real-time monitoring
@@ -88,21 +101,35 @@ await tool.controlDevice({
   action: "capture_snapshot",
 });
 
-// Subscribe to real-time events
+// Subscribe to real-time events (cameras, doorbells, alarm sensors)
 tool.subscribeToEvents((event) => {
   console.log(`${event.type} on ${event.deviceName}`);
 });
 
-// Query historic events
+// Query historic events (persisted in SQLite)
 const motionEvents = tool.queryEvents({
   type: "motion",
   limit: 10,
 });
 
+// Query Ring's cloud-stored camera events (up to 180 days)
+const cloudEvents = await tool.getCloudEvents({
+  deviceId: "12345",
+  kind: "motion",
+  limit: 20,
+});
+
+// Search cloud video recordings by date range
+const videos = await tool.searchVideos({
+  deviceId: "12345",
+  dateFrom: "2025-06-01T00:00:00Z",
+  dateTo: "2025-06-15T23:59:59Z",
+});
+
 // Check routine audit log
 const routines = tool.queryRoutines({ result: "failure" });
 
-// Clean up
+// Clean up (closes SQLite connection)
 tool.shutdown();
 ```
 
@@ -135,8 +162,11 @@ All configuration is via environment variables (or `.env` file):
 | `RING_CAMERA_POLL_SECONDS` | No | 30 | Camera status polling interval |
 | `RING_LOCATION_POLL_SECONDS` | No | — | Location mode polling interval |
 | `RING_DEBUG` | No | false | Enable debug logging |
-| `EVENT_LOG_MAX_SIZE` | No | 1000 | Max events in memory |
-| `EVENT_LOG_FILE` | No | ./ring-events.log | Event log file path |
+| `EVENT_LOG_MAX_SIZE` | No | 1000 | Max events in the database |
+| `EVENT_LOG_FILE` | No | ./ring-events.log | Optional NDJSON event log file path |
+| `RING_DATABASE_PATH` | No | ./ring-data.db | SQLite database file path (use `:memory:` for no persistence) |
+| `ROUTINE_LOG_MAX_SIZE` | No | 100000 | Max routine log entries in the database |
+| `CLOUD_CACHE_MAX_AGE_MINUTES` | No | 30 | Cloud event cache staleness threshold in minutes |
 
 ## Development
 
