@@ -6,7 +6,12 @@
 
 import { RingClient } from "../client/ring-client.js";
 import { DeviceManager } from "../devices/device-manager.js";
+import { RingDatabase } from "../storage/database.js";
+import { EventStore } from "../storage/event-store.js";
+import { RoutineStore } from "../storage/routine-store.js";
+import { CloudCache } from "../storage/cloud-cache.js";
 import { EventLogger } from "../events/event-logger.js";
+import { CloudHistory } from "../events/cloud-history.js";
 import { RealtimeMonitor } from "../events/realtime-monitor.js";
 import { RoutineLogger } from "../logging/routine-logger.js";
 import type {
@@ -18,24 +23,43 @@ import type {
   DeviceCommand,
   AlarmAction,
   EventQuery,
+  CloudEventQuery,
+  CloudEventQueryResult,
+  CloudVideoResult,
+  VideoSearchQuery,
+  DeviceHistoryQuery,
 } from "../types/index.js";
 
 export class RingEcosystemTool {
   private client: RingClient;
+  private database: RingDatabase;
   private deviceManager: DeviceManager;
   private eventLogger: EventLogger;
+  private cloudHistory: CloudHistory;
   private realtimeMonitor: RealtimeMonitor;
   private routineLogger: RoutineLogger;
 
   constructor(config: RingToolConfig) {
     this.client = new RingClient(config);
     this.deviceManager = new DeviceManager(this.client);
-    this.eventLogger = new EventLogger(
-      config.eventLogMaxSize ?? 1000,
-      config.eventLogFile
+
+    // Initialize SQLite database and stores
+    this.database = new RingDatabase({
+      filePath: config.databasePath ?? "./ring-data.db",
+    });
+    const conn = this.database.getConnection();
+
+    const eventStore = new EventStore(conn, config.eventLogMaxSize ?? 100000);
+    const routineStore = new RoutineStore(conn, config.routineLogMaxSize ?? 100000);
+    const cloudCache = new CloudCache(
+      conn,
+      (config.cloudCacheMaxAgeMinutes ?? 30) * 60 * 1000
     );
+
+    this.eventLogger = new EventLogger(eventStore, config.eventLogFile);
+    this.routineLogger = new RoutineLogger(routineStore);
+    this.cloudHistory = new CloudHistory(this.client, cloudCache);
     this.realtimeMonitor = new RealtimeMonitor(this.client, this.eventLogger);
-    this.routineLogger = new RoutineLogger(500);
   }
 
   // ── Lifecycle ──
@@ -50,6 +74,7 @@ export class RingEcosystemTool {
 
   shutdown(): void {
     this.realtimeMonitor.stop();
+    this.database.close();
   }
 
   // ── Location Operations ──
@@ -210,6 +235,28 @@ export class RingEcosystemTool {
 
   unsubscribeFromEvents(subscriptionId: string): boolean {
     return this.realtimeMonitor.unsubscribe(subscriptionId);
+  }
+
+  // ── Cloud History ──
+
+  async getCloudEvents(query: CloudEventQuery = {}): Promise<CloudEventQueryResult> {
+    return this.cloudHistory.getEvents(query);
+  }
+
+  async searchVideos(query: VideoSearchQuery): Promise<CloudVideoResult[]> {
+    return this.cloudHistory.searchVideos(query);
+  }
+
+  async getRecordingUrl(
+    deviceId: string,
+    dingIdStr: string,
+    options?: { transcoded?: boolean }
+  ): Promise<string> {
+    return this.cloudHistory.getRecordingUrl(deviceId, dingIdStr, options);
+  }
+
+  async getDeviceHistory(query: DeviceHistoryQuery): Promise<unknown[]> {
+    return this.cloudHistory.getDeviceHistory(query);
   }
 
   // ── Status ──

@@ -5,3 +5,6 @@ ring-config.json
 *.log
 ring-events.log
 .DS_Store
+*.db
+*.db-wal
+*.db-shm

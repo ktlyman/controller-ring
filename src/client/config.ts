@@ -18,6 +18,9 @@ export function loadConfigFromEnv(): RingToolConfig {
     debug: process.env.RING_DEBUG === "true",
     eventLogMaxSize: optionalInt(process.env.EVENT_LOG_MAX_SIZE, 1000),
     eventLogFile: process.env.EVENT_LOG_FILE ?? "./ring-events.log",
+    databasePath: process.env.RING_DATABASE_PATH ?? "./ring-data.db",
+    routineLogMaxSize: optionalInt(process.env.ROUTINE_LOG_MAX_SIZE, 100000),
+    cloudCacheMaxAgeMinutes: optionalInt(process.env.CLOUD_CACHE_MAX_AGE_MINUTES, 30),
   };
 }
 

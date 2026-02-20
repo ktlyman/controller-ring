@@ -91,6 +91,16 @@ export type RingEventType =
   | "siren_off"
   | "snapshot_captured"
   | "connection_change"
+  | "contact_open"
+  | "contact_close"
+  | "sensor_motion"
+  | "sensor_motion_clear"
+  | "tamper"
+  | "tamper_clear"
+  | "flood"
+  | "freeze"
+  | "smoke_alarm"
+  | "co_alarm"
   | "unknown";
 
 // ── Routine Types ──
@@ -156,6 +166,109 @@ export interface EventSubscription {
   callback: (event: RingEvent) => void;
 }
 
+// ── Cloud History Types ──
+
+/** Event kind from Ring's cloud API (camera dings, motion, etc.) */
+export type DingKind =
+  | "motion"
+  | "ding"
+  | "on_demand"
+  | "alarm"
+  | "on_demand_link"
+  | "door_activity"
+  | "key_access"
+  | "DELETED_FOOTAGE"
+  | "OFFLINE_FOOTAGE"
+  | "OFFLINE_MOTION";
+
+/** A camera event fetched from Ring's cloud history. */
+export interface CloudCameraEvent {
+  id: string;
+  dingIdStr: string;
+  deviceId: string;
+  deviceName: string;
+  locationId: string;
+  locationName: string;
+  kind: DingKind;
+  createdAt: string;
+  favorite: boolean;
+  recordingStatus: string;
+  state: string;
+  cvProperties: {
+    personDetected: unknown;
+    detectionType: unknown;
+    streamBroken: unknown;
+  };
+}
+
+/** Query parameters for fetching cloud camera events. */
+export interface CloudEventQuery {
+  /** Camera device ID (if omitted, queries location-wide) */
+  deviceId?: string;
+  /** Location ID to scope the query */
+  locationId?: string;
+  /** Filter by event kind */
+  kind?: DingKind;
+  /** Filter by event state */
+  state?: "missed" | "accepted" | "person_detected";
+  /** Only return favorited events */
+  favorites?: boolean;
+  /** Max number of events (default: 20) */
+  limit?: number;
+  /** Cursor for pagination from a previous response */
+  paginationKey?: string;
+}
+
+/** Result of a cloud event query, with pagination info. */
+export interface CloudEventQueryResult {
+  events: CloudCameraEvent[];
+  paginationKey: string | null;
+  hasMore: boolean;
+}
+
+/** A video recording result from Ring's cloud. */
+export interface CloudVideoResult {
+  dingId: string;
+  createdAt: string;
+  kind: DingKind;
+  state: string;
+  duration: number;
+  favorite: boolean;
+  thumbnailUrl: string | null;
+  lqUrl: string;
+  hqUrl: string | null;
+  untranscodedUrl: string;
+  cvProperties: {
+    personDetected: unknown;
+    detectionType: unknown;
+    streamBroken: unknown;
+  };
+}
+
+/** Query parameters for searching video recordings. */
+export interface VideoSearchQuery {
+  /** Camera device ID */
+  deviceId: string;
+  /** Start of date range (ISO 8601) */
+  dateFrom: string;
+  /** End of date range (ISO 8601) */
+  dateTo: string;
+  /** Sort order (default: "desc") */
+  order?: "asc" | "desc";
+}
+
+/** Query parameters for alarm/beams device history. */
+export interface DeviceHistoryQuery {
+  /** Location ID */
+  locationId: string;
+  /** Max number of events (default: 50) */
+  limit?: number;
+  /** Offset for pagination */
+  offset?: number;
+  /** Filter by device category */
+  category?: "alarm" | "beams";
+}
+
 // ── Configuration ──
 
 export interface RingToolConfig {
@@ -166,4 +279,10 @@ export interface RingToolConfig {
   debug?: boolean;
   eventLogMaxSize?: number;
   eventLogFile?: string;
+  /** Path to the SQLite database file. Default: "./ring-data.db" */
+  databasePath?: string;
+  /** Max routine log entries to keep. Default: 100000 */
+  routineLogMaxSize?: number;
+  /** Cloud event cache max age in minutes. Default: 30 */
+  cloudCacheMaxAgeMinutes?: number;
 }

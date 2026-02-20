@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { EventLogger } from "../src/events/event-logger.js";
+import { createTestEventStore } from "./helpers/test-db.js";
 
 describe("EventLogger", () => {
   let logger: EventLogger;
 
   beforeEach(() => {
-    logger = new EventLogger(100);
+    logger = new EventLogger(createTestEventStore(100));
   });
 
   it("records an event and assigns an id and timestamp", () => {
@@ -42,7 +43,7 @@ describe("EventLogger", () => {
   });
 
   it("enforces max size by trimming oldest events", () => {
-    const small = new EventLogger(3);
+    const small = new EventLogger(createTestEventStore(3));
 
     for (let i = 0; i < 5; i++) {
       small.record({
@@ -51,6 +52,7 @@ describe("EventLogger", () => {
         locationId: "loc-1",
         locationName: "Home",
         type: "motion",
+        timestamp: `2025-01-15T10:0${i}:00Z`,
         metadata: { index: i },
       });
     }

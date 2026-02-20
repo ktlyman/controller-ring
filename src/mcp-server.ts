@@ -281,6 +281,154 @@ server.tool(
   }
 );
 
+// ── Tool: get_cloud_events ──
+
+server.tool(
+  "get_cloud_events",
+  "Query Ring's cloud-stored camera event history (motion, doorbell presses, on-demand recordings, etc.). Returns events from Ring's cloud servers, which can go back up to 180 days depending on Ring Protect plan. Supports cursor-based pagination via pagination_key.",
+  {
+    device_id: z
+      .string()
+      .optional()
+      .describe("Camera device ID to query. If omitted, queries all cameras at the specified location or across all locations."),
+    location_id: z
+      .string()
+      .optional()
+      .describe("Location ID to scope the query. Used when device_id is not provided."),
+    kind: z
+      .enum(["motion", "ding", "on_demand", "alarm", "on_demand_link", "door_activity", "key_access"])
+      .optional()
+      .describe("Filter by event kind"),
+    state: z
+      .enum(["missed", "accepted", "person_detected"])
+      .optional()
+      .describe("Filter by event state"),
+    favorites: z.boolean().optional().describe("Only return favorited events"),
+    limit: z.number().optional().describe("Max events to return (default: 20)"),
+    pagination_key: z
+      .string()
+      .optional()
+      .describe("Cursor from a previous response to fetch the next page of results"),
+  },
+  async ({ device_id, location_id, kind, state, favorites, limit, pagination_key }) => {
+    try {
+      const result = await ring.getCloudEvents({
+        deviceId: device_id,
+        locationId: location_id,
+        kind,
+        state,
+        favorites,
+        limit,
+        paginationKey: pagination_key,
+      });
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(result, null, 2),
+        }],
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${errorMessage(err)}` }], isError: true };
+    }
+  }
+);
+
+// ── Tool: search_videos ──
+
+server.tool(
+  "search_videos",
+  "Search for video recordings from a specific Ring camera within a date range. Returns video metadata including thumbnail URLs, playback URLs, duration, and person detection info. Requires a Ring Protect plan for recorded video access.",
+  {
+    device_id: z.string().describe("The camera device ID to search videos for"),
+    date_from: z.string().describe("Start of date range (ISO 8601, e.g., '2025-06-15T00:00:00Z')"),
+    date_to: z.string().describe("End of date range (ISO 8601, e.g., '2025-06-15T23:59:59Z')"),
+    order: z
+      .enum(["asc", "desc"])
+      .optional()
+      .describe("Sort order by creation time (default: desc)"),
+  },
+  async ({ device_id, date_from, date_to, order }) => {
+    try {
+      const results = await ring.searchVideos({
+        deviceId: device_id,
+        dateFrom: date_from,
+        dateTo: date_to,
+        order,
+      });
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({ count: results.length, videos: results }, null, 2),
+        }],
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${errorMessage(err)}` }], isError: true };
+    }
+  }
+);
+
+// ── Tool: get_recording_url ──
+
+server.tool(
+  "get_recording_url",
+  "Get a direct playback URL for a specific Ring camera recording by its ding ID. The URL is temporary and expires after a short period. Use get_cloud_events or search_videos first to find the ding ID.",
+  {
+    device_id: z.string().describe("The camera device ID"),
+    ding_id: z.string().describe("The ding ID string (from event or video search results)"),
+    transcoded: z
+      .boolean()
+      .optional()
+      .describe("Request the transcoded (H.264 MP4) version instead of original format (default: false)"),
+  },
+  async ({ device_id, ding_id, transcoded }) => {
+    try {
+      const url = await ring.getRecordingUrl(device_id, ding_id, { transcoded });
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({ deviceId: device_id, dingId: ding_id, recordingUrl: url }, null, 2),
+        }],
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${errorMessage(err)}` }], isError: true };
+    }
+  }
+);
+
+// ── Tool: get_device_history ──
+
+server.tool(
+  "get_device_history",
+  "Get alarm or Ring Beams device history for a location. Returns events from the security panel and connected sensors (not camera events — use get_cloud_events for cameras).",
+  {
+    location_id: z.string().describe("The location ID"),
+    limit: z.number().optional().describe("Max number of events (default: 50)"),
+    offset: z.number().optional().describe("Offset for pagination (default: 0)"),
+    category: z
+      .enum(["alarm", "beams"])
+      .optional()
+      .describe("Filter by device category"),
+  },
+  async ({ location_id, limit, offset, category }) => {
+    try {
+      const events = await ring.getDeviceHistory({
+        locationId: location_id,
+        limit,
+        offset,
+        category,
+      });
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({ count: events.length, events }, null, 2),
+        }],
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${errorMessage(err)}` }], isError: true };
+    }
+  }
+);
+
 // ── Start server ──
 
 async function main() {

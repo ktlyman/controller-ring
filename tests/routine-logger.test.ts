@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { RoutineLogger } from "../src/logging/routine-logger.js";
+import { createTestRoutineStore } from "./helpers/test-db.js";
 
 describe("RoutineLogger", () => {
   let logger: RoutineLogger;
 
   beforeEach(() => {
-    logger = new RoutineLogger(100);
+    logger = new RoutineLogger(createTestRoutineStore(100));
   });
 
   it("logs a routine entry", () => {
@@ -27,10 +28,10 @@ describe("RoutineLogger", () => {
   });
 
   it("enforces max size", () => {
-    const small = new RoutineLogger(2);
-    small.log({ action: "a", locationId: "l", locationName: "L", parameters: {}, result: "success" });
-    small.log({ action: "b", locationId: "l", locationName: "L", parameters: {}, result: "success" });
-    small.log({ action: "c", locationId: "l", locationName: "L", parameters: {}, result: "success" });
+    const small = new RoutineLogger(createTestRoutineStore(2));
+    small.log({ action: "a", timestamp: "2025-01-15T10:00:00Z", locationId: "l", locationName: "L", parameters: {}, result: "success" });
+    small.log({ action: "b", timestamp: "2025-01-15T11:00:00Z", locationId: "l", locationName: "L", parameters: {}, result: "success" });
+    small.log({ action: "c", timestamp: "2025-01-15T12:00:00Z", locationId: "l", locationName: "L", parameters: {}, result: "success" });
 
     expect(small.size).toBe(2);
     const entries = small.query();

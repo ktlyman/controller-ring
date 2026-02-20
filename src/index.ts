@@ -8,7 +8,12 @@
 export { RingEcosystemTool } from "./tools/ring-ecosystem-tool.js";
 export { RingClient } from "./client/ring-client.js";
 export { DeviceManager } from "./devices/device-manager.js";
+export { RingDatabase } from "./storage/database.js";
+export { EventStore } from "./storage/event-store.js";
+export { RoutineStore } from "./storage/routine-store.js";
+export { CloudCache } from "./storage/cloud-cache.js";
 export { EventLogger } from "./events/event-logger.js";
+export { CloudHistory } from "./events/cloud-history.js";
 export { RealtimeMonitor } from "./events/realtime-monitor.js";
 export { RoutineLogger } from "./logging/routine-logger.js";
 export { loadConfigFromEnv } from "./client/config.js";
